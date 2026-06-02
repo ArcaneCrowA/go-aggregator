@@ -3,8 +3,12 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/ArcaneCrowA/go-aggregator/internal/data"
 	"github.com/ArcaneCrowA/go-aggregator/internal/handlers"
@@ -119,7 +123,33 @@ func (a *app) startServer() {
 		g.GET("/", handler.GetSubscriptionsFilter)
 	}
 
-	if err := router.Run(a.cfg.address); err != nil {
-		a.log.Error("failed to run", zap.Error(err))
+	server := &http.Server{
+		Addr:    a.cfg.address,
+		Handler: router,
 	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-quit
+		a.log.Info("server shutdown")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(ctx); err != nil {
+			a.log.Fatal("failed to close server", zap.Error(err))
+		}
+	}()
+
+	a.log.Info("server starts", zap.String("address", a.cfg.address))
+	if err := server.ListenAndServe(); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			a.log.Info("server closed")
+		} else {
+			a.log.Error("failed to serve", zap.Error(err))
+		}
+	}
+
 }

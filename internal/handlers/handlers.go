@@ -42,7 +42,7 @@ func (h *handler) AddSubscription(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{"status": "accepted"})
+	c.JSON(http.StatusCreated, gin.H{"status": "accepted"})
 }
 
 func (h *handler) GetSubscriptionsFilter(c *gin.Context) {
